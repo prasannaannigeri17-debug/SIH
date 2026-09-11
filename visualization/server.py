@@ -1,7 +1,4 @@
-﻿"""
-FastAPI + WebSocket Streaming Server for Real-Time 3D LiDAR & Adaptive Grid Dashboard.
-"""
-import os
+﻿import os
 import sys
 import json
 import asyncio
@@ -26,24 +23,18 @@ from benchmarking.metrics import PerformanceMetrics
 from benchmarking.runner import BenchmarkRunner
 
 
-def create_app(
-    config_path: str = "config/config.yaml",
-    class_cfg_path: str = "config/semantic_classes.yaml",
-    source_path: Optional[str] = None
-) -> FastAPI:
-    with open(config_path, "r") as f:
+def create_app(config_path: str = "config/config.yaml", class_cfg_path: str = "config/semantic_classes.yaml", source_path: Optional[str] = None) -> FastAPI:
+    with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
-    with open(class_cfg_path, "r") as f:
+    with open(class_cfg_path, "r", encoding="utf-8") as f:
         class_cfg = yaml.safe_load(f)
 
     app = FastAPI(title="Adaptive 2.5D LiDAR Mapping Dashboard")
 
-    # Static web files path
     web_dir = os.path.join(os.path.dirname(__file__), "web")
     if os.path.exists(web_dir):
         app.mount("/static", StaticFiles(directory=web_dir), name="static")
 
-    # State
     pipeline_state = {
         "loader": create_loader(source_path),
         "preprocessor": PointCloudProcessor(config),
@@ -56,6 +47,7 @@ def create_app(
         "class_cfg": class_cfg,
         "current_frame_idx": 0,
         "is_playing": True,
+        "force_update": True, # Always process the very first frame
         "fps_target": config.get("server", {}).get("fps_target", 15),
         "aggregation_mode": config.get("grid", {}).get("default_aggregation", "robust")
     }
@@ -76,39 +68,45 @@ def create_app(
             "classes": pipeline_state["class_cfg"].get("classes", {})
         })
 
-    @app.get("/api/benchmark")
-    async def run_benchmark():
-        runner = BenchmarkRunner(pipeline_state["config"])
-        res = runner.run_full_benchmark(num_frames=15)
-        return JSONResponse(content=res)
-
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
         await websocket.accept()
         try:
             while True:
-                # Check for incoming client commands (play, pause, seek, set_mode)
+                # Command handling
                 try:
-                    data = await asyncio.wait_for(websocket.receive_text(), timeout=0.01)
+                    data = await asyncio.wait_for(websocket.receive_text(), timeout=0.02)
                     msg = json.loads(data)
                     cmd = msg.get("command")
                     if cmd == "play":
                         pipeline_state["is_playing"] = True
                     elif cmd == "pause":
                         pipeline_state["is_playing"] = False
+                    elif cmd == "step":
+                        pipeline_state["is_playing"] = False
+                        pipeline_state["current_frame_idx"] += 1
+                        pipeline_state["force_update"] = True
                     elif cmd == "seek":
                         pipeline_state["current_frame_idx"] = int(msg.get("frame_index", 0))
+                        pipeline_state["force_update"] = True
                     elif cmd == "set_aggregation":
                         pipeline_state["aggregation_mode"] = str(msg.get("mode", "robust"))
+                        pipeline_state["force_update"] = True
                     elif cmd == "reset":
                         pipeline_state["current_frame_idx"] = 0
                         pipeline_state["adaptive_grid"].clear()
                         pipeline_state["uniform_grid"].clear()
-                        pipeline_state["temporal_manager"].current_time = 0.0
+                        pipeline_state["force_update"] = True
                 except asyncio.TimeoutError:
                     pass
 
-                # If playing, process next frame
+                if not pipeline_state["is_playing"] and not pipeline_state["force_update"]:
+                    await asyncio.sleep(0.05)
+                    continue
+
+                # Process frame
+                pipeline_state["force_update"] = False
+                
                 idx = pipeline_state["current_frame_idx"]
                 loader: BasePointCloudLoader = pipeline_state["loader"]
                 total_frames = len(loader)
@@ -119,25 +117,22 @@ def create_app(
 
                 profiler: PipelineProfiler = pipeline_state["profiler"]
 
-                # Stage 1: Load raw frame
                 profiler.start_stage("load")
                 raw_frame = loader.get_frame(idx)
                 profiler.end_stage("load")
 
-                # Stage 2: Preprocess
                 profiler.start_stage("preprocess")
                 frame = pipeline_state["preprocessor"].process(raw_frame)
                 profiler.end_stage("preprocess")
 
-                # Stage 3: Semantic Segmentation & Dynamic Perception
                 profiler.start_stage("perception")
                 sem_labels, confs, is_dyn, bboxes = pipeline_state["segmenter"].segment(frame)
                 profiler.end_stage("perception")
 
-                # Stage 4: Adaptive Grid Projection & 2.5D Aggregation
                 profiler.start_stage("adaptive_grid")
                 adaptive_grid: AdaptiveResolutionGrid = pipeline_state["adaptive_grid"]
-                pipeline_state["temporal_manager"].update_frame(
+                adaptive_grid.clear()
+                adaptive_grid.insert_points(
                     points=frame.points,
                     semantic_labels=sem_labels,
                     confidences=confs,
@@ -147,7 +142,6 @@ def create_app(
                 )
                 profiler.end_stage("adaptive_grid")
 
-                # Stage 5: Baseline Grid calculation (for real telemetry comparison)
                 profiler.start_stage("baseline_grid")
                 uniform_grid: UniformBaselineGrid = pipeline_state["uniform_grid"]
                 uniform_grid.clear()
@@ -160,41 +154,32 @@ def create_app(
                 )
                 profiler.end_stage("baseline_grid")
 
-                # Snapshot-only adaptive comparison to avoid counting the persistent temporal map
-                adaptive_snapshot = AdaptiveResolutionGrid(
-                    pipeline_state["config"],
-                    pipeline_state["class_cfg"].get("classes", {})
-                )
-                adaptive_snapshot.insert_points(
-                    points=frame.points,
-                    semantic_labels=sem_labels,
-                    confidences=confs,
-                    is_dynamic=is_dyn,
-                    timestamp=frame.timestamp,
-                    aggregation_mode=pipeline_state["aggregation_mode"]
-                )
-
                 profiler.record_frame()
                 prof_summary = profiler.get_summary()
 
-                # Calculate live cell and memory savings from the current frame snapshot
-                adaptive_cell_count = len(adaptive_snapshot.cells)
+                adaptive_cell_count = len(adaptive_grid.cells)
                 baseline_cell_count = len(uniform_grid.cells)
                 cell_reduction_pct = PerformanceMetrics.calculate_cell_reduction(baseline_cell_count, adaptive_cell_count)
-                adaptive_mem_kb = adaptive_snapshot.get_memory_bytes() / 1024.0
+                adaptive_mem_kb = adaptive_grid.get_memory_bytes() / 1024.0
                 baseline_mem_kb = uniform_grid.get_memory_bytes() / 1024.0
                 mem_reduction_pct = PerformanceMetrics.calculate_memory_reduction(int(baseline_mem_kb*1024), int(adaptive_mem_kb*1024))
 
-                # Export sampled point cloud for WebGL rendering (downsample for smooth 60fps web streaming)
+                lat_load = prof_summary["stages_ms"].get("load", 0)
+                lat_prep = prof_summary["stages_ms"].get("preprocess", 0)
+                lat_perc = prof_summary["stages_ms"].get("perception", 0)
+                lat_adapt = prof_summary["stages_ms"].get("adaptive_grid", 0)
+                lat_base = prof_summary["stages_ms"].get("baseline_grid", 0)
+                
+                total_adapt_ms = lat_load + lat_prep + lat_perc + lat_adapt
+                total_base_ms = lat_load + lat_prep + lat_perc + lat_base
+
                 pts_xyz = frame.points
-                # Keep WebSocket frames small enough for browser and proxy limits.
-                step = max(1, len(pts_xyz) // 2500)
+                step = max(1, len(pts_xyz) // 4000)
                 sub_pts = pts_xyz[::step]
                 sub_sem = sem_labels[::step]
                 sub_int = frame.intensities[::step] if frame.intensities is not None else np.ones(len(sub_pts), dtype=np.float32)
 
-                # Export adaptive cells (up to 4000 cells for real-time mesh rendering)
-                cells_export = adaptive_grid.export_cells_for_visualization(max_cells=1200)
+                cells_export = adaptive_grid.export_cells_for_visualization(max_cells=4000)
 
                 payload = {
                     "frame_id": idx,
@@ -212,7 +197,12 @@ def create_app(
                         "baseline_mem_kb": float(round(baseline_mem_kb, 1)),
                         "mem_reduction_pct": mem_reduction_pct,
                         "zone_distribution": adaptive_grid.get_cell_count_per_zone(),
-                        "hardware_device": "CPU / Intel Core" if "torch" not in sys.modules else "CUDA GPU"
+                        "hardware_device": "CPU / Intel Core" if "torch" not in sys.modules else "CUDA GPU",
+                        "benchmark": {
+                            "adaptive_latency_ms": float(round(total_adapt_ms, 2)),
+                            "baseline_latency_ms": float(round(total_base_ms, 2)),
+                            "speedup": float(round(total_base_ms / max(0.01, total_adapt_ms), 2))
+                        }
                     },
                     "points": {
                         "xyz": sub_pts.tolist(),
@@ -228,9 +218,7 @@ def create_app(
 
                 if pipeline_state["is_playing"]:
                     pipeline_state["current_frame_idx"] += 1
-
-                # Maintain target streaming frame rate
-                await asyncio.sleep(1.0 / pipeline_state["fps_target"])
+                    await asyncio.sleep(1.0 / pipeline_state["fps_target"])
 
         except WebSocketDisconnect:
             pass

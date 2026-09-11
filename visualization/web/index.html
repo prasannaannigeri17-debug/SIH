@@ -5,16 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Adaptive Variable-Resolution 2.5D LiDAR Mapping | SIH Demo</title>
   <link rel="stylesheet" href="/static/styles.css">
-  <!-- Three.js and OrbitControls via CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Optional: Material Symbols for crisp, professional iconography -->
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
 </head>
 <body class="dark-theme">
   <!-- Top Navigation Header -->
   <header class="top-nav">
     <div class="logo-group">
-      <div class="status-dot pulsing"></div>
+      <div class="status-dot pulsing" id="status-indicator"></div>
       <div class="title-container">
         <h1>ADAPTIVE 2.5D LiDAR PERCEPTION</h1>
         <span class="subtitle">Smart India Hackathon Prototype | Distance-Foveated Elevation & Semantic Mapping</span>
@@ -37,7 +38,6 @@
         <span class="badge-label">CELL REDUCTION</span>
         <span class="badge-val" id="hud-cell-red">-- %</span>
       </div>
-      <button class="btn-benchmark" id="btn-open-benchmark">⚡ Run SIH Benchmark</button>
     </div>
   </header>
 
@@ -45,10 +45,54 @@
   <main class="main-layout">
     <!-- Left Sidebar: Layers, Zones, Legend -->
     <aside class="sidebar left-sidebar">
+      <!-- Layer Visibility Card -->
+      <div class="panel-card">
+        <div class="card-header">
+          <h3><span class="material-symbols-outlined icon">layers</span> Display Layers</h3>
+        </div>
+        <div class="layer-toggles">
+          <label class="toggle-row">
+            <span>Adaptive 2.5D Grid Mesh</span>
+            <div class="toggle-switch">
+              <input type="checkbox" id="toggle-grid" checked>
+              <span class="slider round"></span>
+            </div>
+          </label>
+          <label class="toggle-row">
+            <span>Raw LiDAR Point Cloud</span>
+            <div class="toggle-switch">
+              <input type="checkbox" id="toggle-points" checked>
+              <span class="slider round"></span>
+            </div>
+          </label>
+          <label class="toggle-row">
+            <span>Zone Boundary Rings</span>
+            <div class="toggle-switch">
+              <input type="checkbox" id="toggle-zones" checked>
+              <span class="slider round"></span>
+            </div>
+          </label>
+          <label class="toggle-row">
+            <span>Dynamic 3D Bounding Boxes</span>
+            <div class="toggle-switch">
+              <input type="checkbox" id="toggle-bboxes" checked>
+              <span class="slider round"></span>
+            </div>
+          </label>
+          <label class="toggle-row">
+            <span>Ego Vehicle Footprint</span>
+            <div class="toggle-switch">
+              <input type="checkbox" id="toggle-ego" checked>
+              <span class="slider round"></span>
+            </div>
+          </label>
+        </div>
+      </div>
+
       <!-- Resolution Zones Card -->
       <div class="panel-card">
         <div class="card-header">
-          <h3>🎯 Distance Resolution Zones</h3>
+          <h3><span class="material-symbols-outlined icon">radar</span> Resolution Zones</h3>
         </div>
         <div class="zone-list" id="zone-list">
           <div class="zone-item zone-a">
@@ -86,39 +130,10 @@
         </div>
       </div>
 
-      <!-- Layer Visibility Card -->
-      <div class="panel-card">
-        <div class="card-header">
-          <h3>👁️ Display Layers</h3>
-        </div>
-        <div class="layer-toggles">
-          <label class="toggle-row">
-            <span>Adaptive 2.5D Grid Mesh</span>
-            <input type="checkbox" id="toggle-grid" checked>
-          </label>
-          <label class="toggle-row">
-            <span>Raw LiDAR Point Cloud</span>
-            <input type="checkbox" id="toggle-points" checked>
-          </label>
-          <label class="toggle-row">
-            <span>Zone Boundary Rings</span>
-            <input type="checkbox" id="toggle-zones" checked>
-          </label>
-          <label class="toggle-row">
-            <span>Dynamic 3D Bounding Boxes</span>
-            <input type="checkbox" id="toggle-bboxes" checked>
-          </label>
-          <label class="toggle-row">
-            <span>Ego Vehicle Footprint</span>
-            <input type="checkbox" id="toggle-ego" checked>
-          </label>
-        </div>
-      </div>
-
       <!-- Semantic Legend -->
-      <div class="panel-card semantic-legend-card">
+      <div class="panel-card semantic-legend-card" style="flex: 1;">
         <div class="card-header">
-          <h3>🏷️ Semantic Classification</h3>
+          <h3><span class="material-symbols-outlined icon">palette</span> Semantic Legend</h3>
         </div>
         <div class="legend-grid" id="legend-grid">
           <!-- Populated by JS -->
@@ -132,16 +147,9 @@
       
       <!-- Overlay View Controls -->
       <div class="view-overlay-controls">
-        <button class="view-btn" id="btn-view-top">Top View (Bird's Eye)</button>
-        <button class="view-btn" id="btn-view-perspective">Perspective</button>
-        <button class="view-btn" id="btn-view-ego">Ego Chase</button>
-        <button class="view-btn" id="btn-auto-orbit">Auto Orbit: ON</button>
-        <button class="view-btn" id="btn-reset-cam">Reset View</button>
-      </div>
-
-      <div class="mini-map-panel">
-        <div class="mini-map-header">EGO TRAJECTORY</div>
-        <canvas id="mini-map-canvas" width="180" height="120"></canvas>
+        <button class="view-btn" id="btn-view-top" title="Top View (Bird's Eye)"><span class="material-symbols-outlined">height</span> Top View</button>
+        <button class="view-btn active" id="btn-view-perspective" title="Perspective View"><span class="material-symbols-outlined">view_in_ar</span> Perspective</button>
+        <button class="view-btn" id="btn-view-ego" title="Ego Chase View"><span class="material-symbols-outlined">directions_car</span> Ego Chase</button>
       </div>
 
       <!-- Live Floating Telemetry Overlay -->
@@ -154,10 +162,48 @@
 
     <!-- Right Sidebar: Live Performance & Telemetry -->
     <aside class="sidebar right-sidebar">
-      <!-- Live Savings Comparison Card -->
+      <!-- Live Integrated Benchmarks Card -->
       <div class="panel-card highlight-card">
         <div class="card-header">
-          <h3>📊 Representation Efficiency</h3>
+          <h3><span class="material-symbols-outlined icon">speed</span> Live Benchmark Metrics</h3>
+        </div>
+        
+        <table class="benchmark-table">
+          <thead>
+            <tr>
+              <th>Metric</th>
+              <th>Adaptive Grid</th>
+              <th>Uniform 5cm</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Active Cells</td>
+              <td class="highlight-val"><span id="tbl-cell-adapt">0</span><br><small class="reduction" id="tbl-cell-red">(-0%)</small></td>
+              <td><span id="tbl-cell-base">0</span></td>
+            </tr>
+            <tr>
+              <td>Memory (KB)</td>
+              <td class="highlight-val"><span id="tbl-mem-adapt">0.0</span><br><small class="reduction" id="tbl-mem-red">(-0%)</small></td>
+              <td><span id="tbl-mem-base">0.0</span></td>
+            </tr>
+            <tr>
+              <td>Latency (ms)</td>
+              <td class="highlight-val"><span id="tbl-lat-adapt">0.0</span><br><small class="speedup" id="tbl-lat-speedup">(1.0x)</small></td>
+              <td><span id="tbl-lat-base">0.0</span></td>
+            </tr>
+          </tbody>
+        </table>
+        
+        <div class="benchmark-summary">
+          <strong>Summary:</strong> Adaptive foveated mapping matches 5cm uniform accuracy near the ego vehicle while achieving massive structural sparsity in the far-field.
+        </div>
+      </div>
+
+      <!-- Representation Efficiency Bars -->
+      <div class="panel-card">
+        <div class="card-header">
+          <h3><span class="material-symbols-outlined icon">bar_chart</span> Resource Footprint</h3>
         </div>
         <div class="comparison-grid">
           <div class="comp-box">
@@ -187,23 +233,12 @@
       </div>
 
       <!-- Latency Breakdown Chart -->
-      <div class="panel-card">
+      <div class="panel-card" style="flex: 1; display: flex; flex-direction: column;">
         <div class="card-header">
-          <h3>⚡ Latency Breakdown (ms)</h3>
+          <h3><span class="material-symbols-outlined icon">analytics</span> Latency Breakdown</h3>
         </div>
-        <div class="chart-box">
+        <div class="chart-box" style="flex: 1;">
           <canvas id="latencyChart"></canvas>
-        </div>
-      </div>
-
-      <!-- Technical Pitch & Pipeline Summary -->
-      <div class="panel-card">
-        <div class="card-header">
-          <h3>🔬 Innovation Breakdown</h3>
-        </div>
-        <div class="tech-notes">
-          <p><strong>Foveated Mapping:</strong> Spatial resolution scales radially $O(1/r)$, maintaining 5cm collision accuracy near ego while saving memory in far zones.</p>
-          <p><strong>Multi-Layer 2.5D:</strong> Preserves min/max elevation, slope, drivability, static/dynamic states, and majority semantics per cell.</p>
         </div>
       </div>
     </aside>
@@ -212,9 +247,15 @@
   <!-- Bottom Playback & Scrubbing Controller -->
   <footer class="bottom-controller">
     <div class="control-cluster">
-      <button class="ctrl-btn" id="btn-play-pause">⏸️ Pause</button>
-      <button class="ctrl-btn" id="btn-step">⏭️ Step</button>
-      <button class="ctrl-btn" id="btn-reset">🔄 Replay</button>
+      <button class="ctrl-btn primary" id="btn-play-pause">
+        <span class="material-symbols-outlined">pause</span> Pause
+      </button>
+      <button class="ctrl-btn" id="btn-step" title="Step Forward One Frame">
+        <span class="material-symbols-outlined">skip_next</span> Step
+      </button>
+      <button class="ctrl-btn" id="btn-reset" title="Restart Sequence">
+        <span class="material-symbols-outlined">replay</span> Restart
+      </button>
     </div>
 
     <div class="scrubber-cluster">
@@ -223,39 +264,26 @@
     </div>
 
     <div class="settings-cluster">
-      <label class="setting-item">
-        <span>Aggregation:</span>
+      <div class="setting-item">
+        <span class="material-symbols-outlined" style="font-size: 16px;">filter_alt</span>
         <select id="select-aggregation" class="select-box">
           <option value="robust">Robust (Percentile)</option>
           <option value="min">Min Z (Ground Surface)</option>
           <option value="max">Max Z (Obstacle Peak)</option>
           <option value="mean">Mean Elevation</option>
         </select>
-      </label>
-      <label class="setting-item">
-        <span>Color Mode:</span>
+      </div>
+      <div class="setting-item">
+        <span class="material-symbols-outlined" style="font-size: 16px;">palette</span>
         <select id="select-color-mode" class="select-box">
           <option value="semantics">Semantic Classes</option>
           <option value="elevation">Elevation Heatmap</option>
           <option value="drivability">Drivability</option>
           <option value="zones">Resolution Zones</option>
         </select>
-      </label>
+      </div>
     </div>
   </footer>
-
-  <!-- Modal for SIH Live Benchmark Results -->
-  <div class="modal-backdrop" id="benchmark-modal">
-    <div class="modal-box">
-      <div class="modal-header">
-        <h2>🚀 SIH Comprehensive Benchmark Report</h2>
-        <button class="btn-close-modal" id="btn-close-modal">&times;</button>
-      </div>
-      <div class="modal-body" id="benchmark-results-container">
-        <div class="loading-spinner">Running 15-frame comparative evaluation...</div>
-      </div>
-    </div>
-  </div>
 
   <script src="/static/app.js"></script>
 </body>

@@ -1,0 +1,63 @@
+﻿sensor:
+  min_range: 0.5
+  max_range: 100.0
+  min_z: -4.0
+  max_z: 15.0
+  hfov_deg: [-180.0, 180.0]
+  vfov_deg: [-25.0, 15.0]
+
+grid:
+  default_aggregation: "robust" # "min", "max", "mean", "robust" (5th-95th percentile)
+  zones:
+    - name: "Zone A (Near Field - High Precision)"
+      min_distance: 0.0
+      max_distance: 10.0
+      resolution: 0.05       # 5 cm
+      color: "#00E5FF"
+    - name: "Zone B (Mid-Near Field - Maneuvering)"
+      min_distance: 10.0
+      max_distance: 30.0
+      resolution: 0.15       # 15 cm
+      color: "#00E676"
+    - name: "Zone C (Mid-Far Field - Navigation)"
+      min_distance: 30.0
+      max_distance: 60.0
+      resolution: 0.30       # 30 cm
+      color: "#FFEA00"
+    - name: "Zone D (Far Field - Long Range Context)"
+      min_distance: 60.0
+      max_distance: 100.0
+      resolution: 0.60       # 60 cm
+      color: "#FF3D00"
+
+baseline_grid:
+  resolution: 0.05           # Uniform 5 cm baseline across entire 100m range
+  max_range: 100.0
+
+terrain:
+  ground_elevation_tolerance: 0.15 # Max height above ground plane to consider road/terrain
+  curb_min_height: 0.08            # 8 cm height step indicates curb
+  curb_max_height: 0.35            # 35 cm maximum curb height
+  max_drivable_slope_deg: 18.0     # Slope threshold for drivability
+  roughness_threshold: 0.06        # Elevation stddev indicating rough/irregular surface
+
+perception:
+  mode: "hybrid"                   # "hybrid", "geometric", "deep_learning", "ground_truth"
+  confidence_threshold: 0.55
+  model_path: "checkpoints/pointnet_semantic.pt"
+  input_features: 4                 # x, y, z, intensity
+  num_classes: 13
+  device: null                       # null selects CUDA when available, otherwise CPU
+  cluster_eps: 0.6
+  cluster_min_samples: 5
+
+temporal:
+  enable_decay: true
+  static_decay_rate: 0.02          # Probability decrease per second for static cells
+  dynamic_decay_rate: 0.80         # Rapid decay / eviction for moving objects
+  stale_timeout_sec: 1.5           # Max age before dynamic cell eviction
+
+server:
+  host: "127.0.0.1"
+  port: 8000
+  fps_target: 20

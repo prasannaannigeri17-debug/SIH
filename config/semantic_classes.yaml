@@ -1,0 +1,79 @@
+classes:
+  0:
+    hex: '#808080'
+    is_drivable: false
+    is_dynamic: false
+    is_terrain: false
+    name: unlabeled
+  1:
+    hex: '#4CAF50'
+    is_drivable: true
+    is_dynamic: false
+    is_terrain: true
+    name: drivable_road
+  2:
+    hex: '#FF9800'
+    is_drivable: false
+    is_dynamic: false
+    is_terrain: true
+    name: sidewalk
+  3:
+    hex: '#8D6E63'
+    is_drivable: false
+    is_dynamic: false
+    is_terrain: true
+    name: rough_terrain
+  4:
+    hex: '#F44336'
+    is_drivable: false
+    is_dynamic: true
+    is_terrain: false
+    name: vehicle
+  5:
+    hex: '#2196F3'
+    is_drivable: false
+    is_dynamic: true
+    is_terrain: false
+    name: pedestrian
+  6:
+    hex: '#00BCD4'
+    is_drivable: false
+    is_dynamic: true
+    is_terrain: false
+    name: cyclist
+  7:
+    hex: '#9C27B0'
+    is_drivable: false
+    is_dynamic: false
+    is_terrain: false
+    name: building
+  8:
+    hex: '#8BC34A'
+    is_drivable: false
+    is_dynamic: false
+    is_terrain: false
+    name: vegetation
+  9:
+    hex: '#FFEB3B'
+    is_drivable: false
+    is_dynamic: false
+    is_terrain: false
+    name: pole_obstacle
+  10:
+    hex: '#795548'
+    is_drivable: false
+    is_dynamic: false
+    is_terrain: false
+    name: wall
+  11:
+    hex: '#FF5722'
+    is_drivable: false
+    is_dynamic: false
+    is_terrain: true
+    name: curb
+  12:
+    hex: '#E91E63'
+    is_drivable: false
+    is_dynamic: false
+    is_terrain: true
+    name: pothole_irregular
